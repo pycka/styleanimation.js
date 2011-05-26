@@ -1,4 +1,5 @@
 /**
+ * @file
  * jQuery-inspired, library-less JavaScript function for DOM animation. 
  * Works in a similar way to jQuery's animate() or CSS 3 transitions -
  * - transits (is it a proper word?) current css property state to that
@@ -12,15 +13,24 @@
  * and by modern I mean IE 6+.
  * 
  * @author Radek Pycka
+ * @license MIT (see LICENSE file)
  * @version 0.1
+ */
+
+
+/**
+ * Main utility function. Usually the only used directly by user (not counting
+ * animation object methods, like .start() & .stop()).
+ * A wrapper for Animation object constructor, automatically starts animation.
  * 
+ *
  * @param element	element or array-like set of elements to animate (required)
  * @param props		a map (simple object) with properties designating which css properties to use and theirs targeted values (required)
  * @param duration	duration of animation, 500 ms by default (optional)
  * @param callback	function fired after animation completion (optional, NOT WORKING YET!)
- * @param easing	function mapping time to advancement, linear by default, logarythmic provided
+ * @param easing	function mapping time to advancement, linear by default (might be provided as function object or name of built-in function)
  *  
- * @return undefined
+ * @return Animation object
  */
 function StyleAnimation(element, props, duration, callback, easing) {
 	
@@ -33,6 +43,7 @@ function StyleAnimation(element, props, duration, callback, easing) {
 	catch (e) {
 		element = [element];
 	}
+	
 	var animation = new StyleAnimation.Animation(element, props, duration, callback, easing);
 	animation.start();
 	
@@ -42,8 +53,14 @@ function StyleAnimation(element, props, duration, callback, easing) {
 
 /**
  * Constructor for animation objects. Will be returned by StyleAnimation function
- * and will contain methods for remote controlling (like: stop(), pause(), play()).
- * Called internally, isn't really useful for external usage.
+ * and will contain methods for remote controlling (like: stop() and play()).
+ * 
+ * @param elements		array or array-like object with DOM elements which will be affected
+ * @param properties	map of properties and targeted values
+ * @param duration		length of animation, in useconds [optional]
+ * @param callback		callback to be run at completion of animation (called once for all!) [optional]
+ * @param easing		function dictating dynamics of changes through animation, linear function "y = x" by default
+ * @return Animation object
  */
 StyleAnimation.Animation = function (elements, properties, duration, callback, easing) {
 	
@@ -86,9 +103,17 @@ StyleAnimation.Animation = function (elements, properties, duration, callback, e
 	return this;
 };
 
+/**
+ * Stop animation. 
+ */
 StyleAnimation.Animation.prototype.stop = function () {
 	this.cancel = true;
 };
+
+/**
+ * Start animation. Restarting/rewinding animation is currently not supported, but
+ * this method might be called more than once, to unknown result.
+ */
 StyleAnimation.Animation.prototype.start = function () {
 	var that = this;
 	this.cancel = false;
@@ -98,9 +123,23 @@ StyleAnimation.Animation.prototype.start = function () {
 	});
 };
 
+/**
+ * Abstraction for requestAnimationFrame method, providing fallback for browsers
+ * not supporting it (basically everything besides Fx 4+ and Chrome (10+, not sure)).
+ * 
+ * Fallback timer resolution is 10 ms and is under heavy investigation as it might
+ * cause some performance drops on less powerfull hardware.
+ */
 StyleAnimation.Animation.prototype.requestAnimationFrame = (function (window) {
-	if (false && window.mozRequestAnimationFrame) {
-		return mozRequestAnimationFrame;
+	if (window.mozRequestAnimationFrame) {
+		return function (callback) {
+			mozRequestAnimationFrame(callback);
+		};
+	}
+	else if (window.webkitRequestAnimationFrame) {
+		return function (callback) {
+			webkitRequestAnimationFrame(callback);
+		};
 	}
 	else {
 		return function (callback) {
@@ -154,6 +193,15 @@ StyleAnimation.Animation.prototype.animate = function (now) {
  * By default provided 
  */
 StyleAnimation.accessors = {};
+
+/**
+ * Numeric accessor manages values in this pattern [-+]?(int|float)(unit)?.
+ * Most common properties served are:
+ *  - dimensional (width, height, paddings), 
+ *  - positional (margins, offsets: top, left, bottom, right)
+ * 
+ * When writing (set method) will use unit found with getter on initial property value. 
+ */
 StyleAnimation.accessors.numeric = {
 	get : function (raw) {
 		var re = /([.0-9+-]+)([^.0-9+-]+)?/;
@@ -168,7 +216,7 @@ StyleAnimation.accessors.numeric = {
 		return prop;
 	},
 	set : function (node, name, start, current) {
-		node.style[name] = current.value + start.unit;
+		node.style[name] = current.value + (start.unit || '');
 	},
 	update : function (start, target, progress) {
 		var distance = (target.value - start.value) * progress;
@@ -188,7 +236,23 @@ StyleAnimation.properties = {};
 
 
 /**
- * Cross-browser computed style getter..
+ * Container for animation dynamics implementations. Use this freely for your own.
+ * By default uses linear easing.
+ */
+StyleAnimation.dynamics = {};
+StyleAnimation.dynamics.linear = function (x) {
+	return x;
+};
+
+/* crude & ugly, temp */
+StyleAnimation.dynamics.logarithmic = function (x) {
+	return (Math.log(x*100) / Math.log(100));
+}
+
+// HELPERS - for crossbrowser
+
+/**
+ * Cross-browser computed style getter. Can be used freely outside SA.
  * 
  * @param element	DOM element
  * @param element	CSS property name in camel case format, e.g. marginLeft instead of margin-left
@@ -213,7 +277,7 @@ StyleAnimation.getComputedStyle = (function (window, document) {
 
 
 /**
- * Crossbrowser, efficent current timestamp in useconds getter.
+ * Get current timestamp with microsecond resolution.
  */
 StyleAnimation.utime = (function () {
 	if (Date.now) {
@@ -228,18 +292,3 @@ StyleAnimation.utime = (function () {
 	}
 })();
 
-
-
-/**
- * Container for animation dynamics implementations. Use this freely for your own.
- * By default uses linear easing.
- */
-StyleAnimation.dynamics = {};
-StyleAnimation.dynamics.linear = function (x) {
-	return x;
-};
-
-/* crude & ugly, temp */
-StyleAnimation.dynamics.logarithmic = function (x) {
-	return (Math.log(x*100) / Math.log(100));
-}
