@@ -1,0 +1,28 @@
+StyleAnimation
+
+	-- Xbrowser CSS transitions --
+
+									by Radosław Pycka
+
+
+jQuery-inspired, library-less JavaScript function for DOM animation. Works in a similar way to jQuery's animate() or CSS 3 transitions - transits (is it a proper word?) current css property state to that defined by property map. 
+
+As of now, it only handles numeric properties (e.g. height, width) in different measurment units (px, pt, %). Other types, like color, will be added later (or you may do it by yourself - it's quite easily expendable). Doesn't require any additional libraries and works in all modern browsers, and by modern I mean IE 6+.
+
+And the best part, filesize:
+- development version: 	~ 8kB
+- production (minified) ~ 2.5kB (!)
+- gzipped				~ 1kB (!!) 
+
+
+Status: usable / under active development
+
+
+TODO:
+- docs
+- demos
+- (moz|webkit)RequestAnimationFrame - already ready, just code it
+- examples
+- accessors for color, opacity and other transitions
+- speed optimization
+- testing

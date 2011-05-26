@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<div id="dummy" style="background: red; width: 100px; height: 100px;"></div>
+
+<script src="../StyleAnimation.js"></script>
+<script>
+	window.onload = function () {
+		var mydiv = document.getElementById('dummy');
+		var animation = StyleAnimation(mydiv, {height: '500', width: '500px'}, 1000, null, 'linear');
+	}
+</script>
