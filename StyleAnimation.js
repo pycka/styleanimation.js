@@ -1,107 +1,119 @@
 /**
- * @file
- * jQuery-inspired, library-less JavaScript function for DOM animation. 
- * Works in a similar way to jQuery's animate() or CSS 3 transitions -
- * - transits (is it a proper word?) current css property state to that
- * defined by property map. 
+ * StyleAnimation
  * 
- * As of now, it only handles numeric properties (e.g. height, width) in different
- * measurment units (px, pt, %). Other types, like color, will be added later
- * (or you may do it by yourself - it's quite easily expendable).
- * 
- * Doesn't require any additional libraries and works in all modern browsers,
- * and by modern I mean IE 6+.
+ * -- Xbrowser utility for CSS transitions  --
  * 
  * @author Radek Pycka
+ * @see README file
  * @license MIT (see LICENSE file)
  * @version 0.1
  */
 
 
 /**
- * Main utility function. Usually the only used directly by user (not counting
- * animation object methods, like .start() & .stop()).
  * A wrapper for Animation object constructor, automatically starts animation.
+ * See StyleAnimation.Animation for details on usage.
  * 
- *
- * @param element	element or array-like set of elements to animate (required)
- * @param props		a map (simple object) with properties designating which css properties to use and theirs targeted values (required)
- * @param duration	duration of animation, 500 ms by default (optional)
- * @param callback	function fired after animation completion (optional, NOT WORKING YET!)
- * @param easing	function mapping time to advancement, linear by default (might be provided as function object or name of built-in function)
- *  
+ * @see StyleAnimation.Animation
  * @return Animation object
  */
-function StyleAnimation(element, props, duration, callback, easing) {
-	
-	// wrap into an array if not an array already - crude as hell
-	try {
-		if (!Object.prototype.toString.call(element) === '[object Array]' || (!element.length)) {
-			element = [element];
-		}
-	}
-	catch (e) {
-		element = [element];
-	}
-	
-	var animation = new StyleAnimation.Animation(element, props, duration, callback, easing);
+function StyleAnimation(elements, props, duration, callback, easing) {
+
+	var animation = new StyleAnimation.Animation(elements, props, duration, callback, easing);
 	animation.start();
-	
+
 	return animation;
 }
 
 
 /**
- * Constructor for animation objects. Will be returned by StyleAnimation function
- * and will contain methods for remote controlling (like: stop() and play()).
+ * Constructor for "Animation object"s. Returned by StyleAnimation function but can
+ * be called directly. Doesn't start automatically.
  * 
- * @param elements		array or array-like object with DOM elements which will be affected
+ * AO (animation object) will contain methods for control (like: stop() and start()).
+ * 
+ * 
+ * Arguments:
+ *  
+ * 1) Elements - DOM elements which get animated. Might be single DOM element,
+ * NodeList with elements or native array with elements.
+ * 
+ * 
+ * 2) Properties with their targeted values. Properties must be provided in camelCase
+ * style (e.g. marginLeft) - this might actually change in other direction quite soon ;). 
+ * 
+ * 
+ * 3) Duration in miliseconds, defaults to StyleAnimation.defaultDuration (500) if 
+ * nothing or null provided).
+ * 
+ * 
+ * 4) Supported callbacks:
+ *	- afterEach => fires after every frame animation, on each element ('this' of the callback will be that element, and current property object will be an argument)
+ *	- afterAll, => called once for all animation, with 'this' set to animation object
+ * AfterAll callback can be also set if providing function directly as an argument.
+ * 
+ * 
+ * 5) Easing dictates dynamics of changes through animation. The standard is linear
+ * animation, where style change progression is proportional to time progression.
+ * Argument can be a function or name of built-in function (users can add 'built-in'
+ * functions buy assigning to StyleAnimation.dynamics object).
+ * 
+ * The prototype for easing function is very simple:
+ *		
+ *		myfun (x) -> y
+ * 
+ * where provided x will be in range of (0.0, 1.0), and y usually in the same range
+ * (but can expand outside if it has useful meaning with used accessors).
+ * 
+ * 
+ * @param elements		element, array or NodeList of elements be animated
  * @param properties	map of properties and targeted values
- * @param duration		length of animation, in useconds [optional]
- * @param callback		callback to be run at completion of animation (called once for all!) [optional]
- * @param easing		function dictating dynamics of changes through animation, linear function "y = x" by default
+ * @param duration		length of animation, in miliseconds [optional]
+ * @param callback		callback or object with callbacks [optional]
+ * @param easing		see above [optional]
  * @return Animation object
  */
 StyleAnimation.Animation = function (elements, properties, duration, callback, easing) {
-	
-	var getRawProperty = StyleAnimation.getComputedStyle;
-	
+
+	// wrap into an array if not an array or NodeList
+	try {
+		if (!Object.prototype.toString.call(elements) === '[object Array]' || !(elements.length && elements.item)) {
+			elements = [elements];
+		}
+	}
+	catch (e) {
+		elements = [elements];
+	}
+
 	this.elements = [];
 	this.count = elements.length;
-	this.duration = duration || 500;
-	this.easing = (easing && (Object.prototype.toString.call(easing) === '[object Function]' 
-						  || StyleAnimation.dynamics[easing]))	// if it is a name
-				  || StyleAnimation.dynamics.linear;			// default
-	this.callback = callback;
+	this.duration = duration || StyleAnimation.defaultDuration;
+	this.easing = (easing && (Object.prototype.toString.call(easing) === '[object Function]' || StyleAnimation.dynamics[easing]))
+					|| StyleAnimation.dynamics.linear; // default
+	
+	if (callback) {
+		this.afterEach = callback.afterEach || false;
+		this.afterAll = callback.afterAll || callback;
+	}
+	else {
+		this.afterEach = false;
+		this.afterAll = false;
+	}
 
 	for (var i = 0, len = this.count ; i < len ; ++i) {
 		var node = elements[i];
 		var element = {
-			node : node
+			node : node,
+			properties : StyleAnimation.parsePropertyMap(node, properties)
 		};
 		
-		var props = [];
-		for (var property in properties) {
-			if (properties.hasOwnProperty(property)) {
-				var accessor = StyleAnimation.properties[property] || StyleAnimation.accessors.numeric;
-				var prop = {
-					name : property,
-					accessor : accessor,
-					start : accessor.get(getRawProperty(node, property)),
-					target : accessor.get(properties[property])
-				};
-				
-				props.push(prop);
-			}
-		}
-		element.properties = props;
-		this.propertyCount = props.length;
-			
+		this.propertyCount = element.properties.length;
 		this.elements.push(element);
 	}
 
 	return this;
 };
+
 
 /**
  * Stop animation. 
@@ -109,6 +121,7 @@ StyleAnimation.Animation = function (elements, properties, duration, callback, e
 StyleAnimation.Animation.prototype.stop = function () {
 	this.cancel = true;
 };
+
 
 /**
  * Start animation. Restarting/rewinding animation is currently not supported, but
@@ -143,11 +156,12 @@ StyleAnimation.Animation.prototype.requestAnimationFrame = (function (window) {
 	}
 	else {
 		return function (callback) {
-			this.timer = setTimeout(callback, 10);
+			this.timer = setTimeout(callback, 16);
 		};
 	}
 })(window);
-	
+
+
 StyleAnimation.Animation.prototype.animate = function (now) {
 	var that = this;
 	if (!this.cancel) {
@@ -181,6 +195,40 @@ StyleAnimation.Animation.prototype.animate = function (now) {
 	}
 };
 
+
+/**
+ * Parse supplied property map into internal property representation using suitable
+ * accessors. Calculations are done in context of animated DOM element.
+ * 
+ * @param node			DOM element to be animated
+ * @param properties	map of properties
+ * @return internal property representation (array of property objects)
+ */
+StyleAnimation.parsePropertyMap = function (node, properties) {
+	var props = [];
+	var getRawProperty = StyleAnimation.getComputedStyle;
+	
+	for (var property in properties) {
+		if (properties.hasOwnProperty(property)) {
+			var accessor = StyleAnimation.properties[property] || StyleAnimation.accessors.numeric;
+			var prop = {
+				name : property,
+				accessor : accessor,
+				start : accessor.get(getRawProperty(node, property)),
+				target : accessor.get(properties[property])
+			};
+
+			props.push(prop);
+		}
+	}
+	
+	return props;
+};
+
+/**
+ * Default duration of animation, in miliseconds.
+ */
+StyleAnimation.defaultDuration = 500;
 
 /**
  * CSS property accessors, grouped into threes of getter (.get), setter (.set) and
@@ -249,10 +297,11 @@ StyleAnimation.dynamics.logarithmic = function (x) {
 	return (Math.log(x*100) / Math.log(100));
 }
 
-// HELPERS - for crossbrowser
+
+// HELPERS - for unified, cross-browser, optimized environment interaction
 
 /**
- * Cross-browser computed style getter. Can be used freely outside SA.
+ * Cross-browser computed style getter. Can be used freely outside SA (it's a static).
  * 
  * @param element	DOM element
  * @param element	CSS property name in camel case format, e.g. marginLeft instead of margin-left
@@ -277,7 +326,7 @@ StyleAnimation.getComputedStyle = (function (window, document) {
 
 
 /**
- * Get current timestamp with microsecond resolution.
+ * Get current timestamp with milisecond resolution.
  */
 StyleAnimation.utime = (function () {
 	if (Date.now) {
